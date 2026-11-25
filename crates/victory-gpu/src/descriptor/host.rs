@@ -1606,13 +1606,16 @@ impl HostHeap {
         // Asked before taking the heap's lock: the placed textures' lock is
         // taken first where both are held.
         let frame = crate::queue::presented() + 1;
-        let evictions = {
-            let b = self.bindless.lock().unwrap_or_else(|e| e.into_inner());
-            b.checked.1 != epochs.1 && b.looked[0] != frame
-        };
-        let live = evictions.then(crate::resource::placed_live);
         let (mut todo, check, remade, exempt) = {
             let mut b = self.bindless.lock().unwrap_or_else(|e| e.into_inner());
+            let live = if b.checked.1 != epochs.1 && b.looked[0] != frame {
+                drop(b);
+                let live = crate::resource::placed_live();
+                b = self.bindless.lock().unwrap_or_else(|e| e.into_inner());
+                Some(live)
+            } else {
+                None
+            };
             let b = &mut *b;
             // Released views, evicted textures, and remapped memory are looked for once a frame.
             let look = b.looked[0] != frame && b.checked != epochs;
@@ -1722,7 +1725,9 @@ impl HostHeap {
                 made[i as usize] = 0;
             }
         }
-        todo.extend(stale_views(&check).into_iter().map(|(i, v)| (i, Some(v))));
+        if !check.is_empty() {
+            todo.extend(stale_views(&check).into_iter().map(|(i, v)| (i, Some(v))));
+        }
         let (started, left) = (std::time::Instant::now(), self.budget_left(0));
         let mut made_any = false;
         let mut fresh = Vec::new();

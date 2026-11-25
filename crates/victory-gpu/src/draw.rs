@@ -770,7 +770,10 @@ impl State {
                 return no("a table not made");
             };
             if let Some((param, dwords)) = stage.user_data {
-                let mut values = vec![0u32; dwords as usize];
+                // A valid D3D12 root signature fits in 64 DWORDs, including
+                // every other parameter. Keep this per-draw buffer on the stack.
+                let mut storage = [0u32; D3D12_MAX_ROOT_COST as usize];
+                let values = &mut storage[..dwords as usize];
                 for u in &t.host.user_data {
                     let fresh = made
                         .iter()
@@ -1190,15 +1193,15 @@ impl State {
             let Some(host) = heap.host() else {
                 continue;
             };
-            let n = entries
+            let needed = entries
                 .iter()
                 .map(|u| u.table_offset_dwords / 8 + 1)
                 .max()
                 .unwrap_or(1);
-            let last = table + u64::from(n - 1) * 32;
+            let last = table + u64::from(needed - 1) * 32;
             // Shaders read such a table to many lengths, and a copy for each
             // ran out of slots: the longest seen serves all.
-            let n = if n >= LARGE { longest(heap, table, n) } else { n };
+            let n = if needed >= LARGE { longest(heap, table, needed) } else { needed };
             if heap.index(last).is_none() {
                 for u in entries {
                     self.table_entry(list, u, compute);
@@ -1215,18 +1218,12 @@ impl State {
             } else {
                 Vec::new()
             };
-            let needed = entries
-                .iter()
-                .map(|u| u.table_offset_dwords as usize / 8 + 1)
-                .max()
-                .unwrap_or(1);
-            let same = self.large_tables.get(&table).and_then(|made| {
+            let needed = needed as usize;
+            if n >= LARGE && let Some(first) = self.large_tables.get(&table).and_then(|made| {
                 made.iter()
-                    .find(|(r, _)| r.len() >= needed && r[..needed] == records[..needed.min(records.len())])
+                    .find(|(r, _)| r.get(..needed) == Some(&records[..needed]))
                     .map(|&(_, first)| first)
-            });
-            if n >= LARGE
-                && let Some(first) = same
+            })
             {
                 for u in entries.iter().filter(|u| u.kind != ResourceType::Cbv) {
                     let handle = table + u64::from(u.table_offset_dwords) * 4;
