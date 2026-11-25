@@ -395,7 +395,17 @@ pub(crate) fn save(now: bool) {
     static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
     const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(20);
     let (Some(dir), Some(library)) = (DIR.get(), library()) else { return };
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    // A periodic checkpoint is already covered by the worker writing it.
+    // Other workers can continue building pipelines while it writes to disk.
+    let mut last = if now {
+        LAST.lock().unwrap_or_else(|e| e.into_inner())
+    } else {
+        match LAST.try_lock() {
+            Ok(last) => last,
+            Err(std::sync::TryLockError::WouldBlock) => return,
+            Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        }
+    };
     if !now && last.is_some_and(|t| t.elapsed() < SAVE_EVERY) {
         return;
     }
@@ -459,7 +469,13 @@ fn write_atomically(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
         NEXT.fetch_add(1, Ordering::Relaxed)
     );
     let tmp = path.with_extension(extension);
-    let written = std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+    let written = std::fs::write(&tmp, bytes).and_then(|()| {
+        // Windows can reject overlapping replacements of the same destination.
+        // Only the rename needs to be serialized, not the temporary file I/O.
+        static PUBLISH: Mutex<()> = Mutex::new(());
+        let _publish = PUBLISH.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::rename(&tmp, path)
+    });
     if written.is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
