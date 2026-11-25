@@ -101,8 +101,6 @@ The first launch after a build translates every shader and builds about
   everywhere.
 - Some compute programs do not translate (ray-tracing structure builders,
   wind volumes, a few others) and their passes are dropped.
-- `crates/victory-shader/src/emit/lower.rs` is larger than the size limit of
-  `cargo xtask policy`; it is source code, not an asset.
 - Many changes are specific to this title and this GPU, and some are marked
   `shortcut:` in the code where they approximate what the console does.
 
