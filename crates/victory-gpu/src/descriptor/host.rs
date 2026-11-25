@@ -79,7 +79,8 @@ impl StrideTable {
     /// The element counts follow the strides, from [`COUNTS_AT`] dwords on
     /// (where shaders, which know no heap's size, look for them).
     fn new(device: &ID3D12Device, len: u32) -> Option<Self> {
-        let bytes = ((u64::from(COUNTS_AT) + u64::from(len)) * 4).max(4);
+        // The count lookup clamps to COUNTS_AT - 1 even on smaller heaps.
+        let bytes = (u64::from(COUNTS_AT) + u64::from(len.max(COUNTS_AT))) * 4;
         let desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
             Width: bytes,
@@ -579,6 +580,13 @@ impl HostHeap {
             ));
         }
         let extra = if sampler { 0 } else { DYNAMIC };
+        if !sampler && victory_shader::emit::VIEW_SLOTS == PORTABLE_VIEWS {
+            let available = PORTABLE_VIEWS - crate::memory::SLOTS;
+            let count = count.min(available - DYNAMIC_CAPPED);
+            let extra = DYNAMIC.min(available - count);
+            let heap = create(PORTABLE_VIEWS).ok()?;
+            return Some(Self::with(host, heap, kind, count, extra));
+        }
         let wanted = count;
         let (heap, count, extra) = match make(count + extra) {
             Ok(heap) => (heap, count, extra),

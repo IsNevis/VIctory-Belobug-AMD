@@ -12,6 +12,7 @@ thiserror.workspace = true
 miniz_oxide.workspace = true
 
 [features]
+portable-view-heaps = []
 # Host D3D12 pipeline checks (`emit::host`).
 host = ["dep:windows"]
 # Debugging switches (emitted-module dumps and the like).

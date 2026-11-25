@@ -168,7 +168,7 @@ pub fn rays() -> bool {
 /// Slots the host's view heaps have at least (`victory-gpu` pads them); the
 /// last is always null. The title's heap is 1,245,184 slots, with
 /// `victory-gpu`'s own slots after it.
-pub const VIEW_SLOTS: u32 = 2_294_784;
+pub const VIEW_SLOTS: u32 = if cfg!(feature = "portable-view-heaps") { 1_000_000 } else { 2_294_784 };
 
 /// Those before the views of memory by address, which programs without
 /// such views stay below.

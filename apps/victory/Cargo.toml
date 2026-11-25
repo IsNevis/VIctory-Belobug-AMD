@@ -21,6 +21,7 @@ clap.workspace = true
 walkdir.workspace = true
 
 [features]
+portable-view-heaps = ["victory-shader/portable-view-heaps"]
 # Debug-level logs and the debugging switches (frame capture, stack dumps,
 # the host debug layer, scripted keys). Off in a plain release build.
 diagnostics = [

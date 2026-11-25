@@ -91,6 +91,13 @@ The first launch after a build translates every shader and builds about
 
 ### Known problems
 
+For adapters that reject the full shader-visible descriptor heap, build with
+`cargo build --release -p victory --features portable-view-heaps`. This
+profile uses one million slots in both the host heap and translated shaders.
+It leaves fewer slots available for large descriptor tables. On the Radeon
+860M this removed the oversized-heap validation error, but world loading
+still encountered a device reset.
+
 - With the in-game phone out the world is unlit (see the table).
 - The per-draw descriptor slots are few for the heaviest places: when they
   run out, some draws of a frame are dropped.
